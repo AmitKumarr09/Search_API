@@ -1,1 +1,9 @@
 run command: python -m uvicorn search_api:app --reload
+
+####info####
+1.Install Python : python --version
+2.Install Required Packages : pip install fastapi uvicorn rapidfuzz
+3.Create a JSON File
+4.Create a Python Script
+5.Start the FastAPI Server :-python -m uvicorn search_api:app --reload
+6.Test the API :http://127.0.0.1:8000/search?q=fastpi
