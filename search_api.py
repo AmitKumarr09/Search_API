@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Query, HTTPException
 import json
 import os
+from rapidfuzz import process, fuzz  # Correct import
 
 app = FastAPI()
 
@@ -13,28 +14,28 @@ if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             video_data = json.load(f)
     except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Error: Invalid JSON format in 'videos.json'")
+        raise HTTPException(status_code=500, detail="Error: Invalid JSON format in 'video.json'")
 else:
-    raise HTTPException(status_code=500, detail="Error: 'videos.json' not found!")
+    raise HTTPException(status_code=500, detail="Error: 'video.json' not found!")
 
-# Improved search function
+# Improved search function with fuzzy matching
 def search_videos(query):
     if not query:
         return [{"message": "Please provide a valid search query."}]
 
     query_lower = query.lower()
+    titles = [video["title"].lower() for video in video_data]
+
+    # Find best matches using fuzzy search
+    matches = process.extract(query_lower, titles, limit=5, scorer=fuzz.partial_ratio)
+
     results = []
+    for matched_title, score, _ in matches:  # Corrected unpacking (ignored index)
+        if score > 60:  # Only return matches with confidence score above 60%
+            original_title = next(video["title"] for video in video_data if video["title"].lower() == matched_title)
+            results.append({"title": original_title, "confidence_score": score})
 
-    for video in video_data:
-        title_lower = video["title"].lower()
-        match_score = sum(1 for word in query_lower.split() if word in title_lower)  # Count matching words
-
-        if match_score > 0:
-            results.append({"title": video["title"], "match_score": match_score})
-
-    # Sort by relevance (higher match score first)
-    results.sort(key=lambda x: x["match_score"], reverse=True)
-    return results[:5] if results else [{"message": "No matching videos found."}]
+    return results if results else [{"message": "No matching videos found."}]
 
 @app.get("/search")
 async def search(query: str = Query(None, alias="q", description="Search query")):
