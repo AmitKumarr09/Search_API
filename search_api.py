@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Query, HTTPException
 import json
 import os
-from rapidfuzz import process, fuzz  # Correct import
 
 app = FastAPI()
 
@@ -18,29 +17,12 @@ if os.path.exists(file_path):
 else:
     raise HTTPException(status_code=500, detail="Error: 'video.json' not found!")
 
-# Improved search function with fuzzy matching
-def search_videos(query):
+# Autocomplete function (Search-As-You-Type)
+@app.get("/autocomplete")
+async def autocomplete(query: str = Query(None, alias="q", description="Autocomplete query")):
     if not query:
-        return [{"message": "Please provide a valid search query."}]
+        return {"suggestions": []}
 
-    query_lower = query.lower()
-    titles = [video["title"].lower() for video in video_data]
+    suggestions = [video["title"] for video in video_data if video["title"].lower().startswith(query.lower())]
 
-    # Find best matches using fuzzy search
-    matches = process.extract(query_lower, titles, limit=5, scorer=fuzz.partial_ratio)
-
-    results = []
-    for matched_title, score, _ in matches:  # Corrected unpacking (ignored index)
-        if score > 60:  # Only return matches with confidence score above 60%
-            original_title = next(video["title"] for video in video_data if video["title"].lower() == matched_title)
-            results.append({"title": original_title, "confidence_score": score})
-
-    return results if results else [{"message": "No matching videos found."}]
-
-@app.get("/search")
-async def search(query: str = Query(None, alias="q", description="Search query")):
-    if query is None:
-        raise HTTPException(status_code=400, detail="Error: Search query is required.")
-
-    videos = search_videos(query)
-    return {"query": query, "results": videos}
+    return {"query": query, "suggestions": suggestions[:5]}  # Limit to 5 suggestions
