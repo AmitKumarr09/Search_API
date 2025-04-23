@@ -1,22 +1,22 @@
 from fastapi import FastAPI, Query, HTTPException
-import json
-import os
-from rapidfuzz import process, fuzz  # Correct import
+import pyodbc
+from rapidfuzz import process, fuzz  # Fuzzy search
 
 app = FastAPI()
 
-# Load video data safely
-video_data = []
-file_path = "video.json"
+# Establish SQL Server connection
+def get_db_connection():
+    conn = pyodbc.connect("DRIVER={SQL Server};SERVER=your_server;DATABASE=VideoDB;UID=your_username;PWD=your_password")
+    return conn
 
-if os.path.exists(file_path):
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            video_data = json.load(f)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Error: Invalid JSON format in 'video.json'")
-else:
-    raise HTTPException(status_code=500, detail="Error: 'video.json' not found!")
+# Fetch video data from SQL Server dynamically
+def fetch_video_titles():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT Title FROM Videos")  # Query SQL Server
+    titles = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return titles
 
 # Improved search function with fuzzy matching
 def search_videos(query):
@@ -24,16 +24,15 @@ def search_videos(query):
         return [{"message": "Please provide a valid search query."}]
 
     query_lower = query.lower()
-    titles = [video["title"].lower() for video in video_data]
+    titles = fetch_video_titles()  # Load data from SQL Server
 
     # Find best matches using fuzzy search
     matches = process.extract(query_lower, titles, limit=5, scorer=fuzz.partial_ratio)
 
     results = []
     for matched_title, score, _ in matches:  # Corrected unpacking (ignored index)
-        if score > 60:  # Only return matches with confidence score above 60%
-            original_title = next(video["title"] for video in video_data if video["title"].lower() == matched_title)
-            results.append({"title": original_title, "confidence_score": score})
+        if score > 60:  # Only return matches with confidence above 60%
+            results.append({"title": matched_title, "confidence_score": score})
 
     return results if results else [{"message": "No matching videos found."}]
 
